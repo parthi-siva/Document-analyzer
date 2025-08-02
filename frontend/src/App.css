@@ -1,0 +1,53 @@
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background-color: #1a1a1a;
+  color: #ffffff;
+}
+
+.app-header {
+  background-color: #2a2a2a;
+  padding: 1rem 2rem;
+  border-bottom: 1px solid #333;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.header-content {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.app-icon {
+  font-size: 1.5rem;
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.app-main {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+@media (max-width: 768px) {
+  .app-main {
+    flex-direction: column;
+  }
+  
+  .app-header {
+    padding: 1rem;
+  }
+  
+  .header-content {
+    justify-content: center;
+  }
+}

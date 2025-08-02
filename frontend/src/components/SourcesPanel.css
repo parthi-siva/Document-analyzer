@@ -1,0 +1,115 @@
+.sources-panel {
+  background-color: #2a2a2a;
+  width: 25%;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid #333;
+  overflow-y: auto;
+}
+
+.sources-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  border-bottom: 1px solid #333;
+  background-color: #333;
+}
+
+.sources-header h2 {
+  font-size: 1.25rem;
+  color: #ffffff;
+}
+
+.sources-content {
+  padding: 1rem;
+}
+
+.upload-section {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  margin-bottom: 1rem;
+}
+
+.add-button, .discover-button, .upload-button {
+  background-color: #4a4a4a;
+  color: #ffffff;
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.add-button:hover, .discover-button:hover, .upload-button:hover {
+  background-color: #555;
+}
+
+.dropzone {
+  background-color: #3a3a3a;
+  border: 2px dashed #555;
+  padding: 1rem;
+  text-align: center;
+  cursor: pointer;
+}
+
+.dropzone-content {
+  font-size: 1rem;
+  color: #bbb;
+}
+
+.dropzone-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+
+.sources-list {
+  margin-top: 1rem;
+}
+
+.source-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 1rem;
+  border: 1px solid #444;
+  border-radius: 5px;
+  margin-bottom: 0.5rem;
+}
+
+.source-info {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.source-icon {
+  font-size: 1.5rem;
+}
+
+.source-details {
+  font-size: 0.9rem;
+  color: #ccc;
+}
+
+.source-name {
+  font-weight: bold;
+  color: #fff;
+}
+
+.source-meta {
+  font-size: 0.8rem;
+  color: #aaa;
+}
+
+.remove-button {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  color: #ff4a4a;
+  cursor: pointer;
+}
+
+.remove-button:hover {
+  color: #ff8787;
+}
