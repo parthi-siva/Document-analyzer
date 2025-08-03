@@ -1,14 +1,12 @@
-from abc import ABC, abstractmethod
-from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi import UploadFile, HTTPException
 from typing import Protocol
-import uvicorn
 import os
 
 # Storage Interface
 class StorageInterface(Protocol):
     async def save(self, file: UploadFile, filename: str) -> str:
         """Save file and return the path/identifier"""
-        ...
+        pass
 
 # Local Storage Implementation
 class LocalStorage:

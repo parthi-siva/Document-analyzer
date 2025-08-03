@@ -1,9 +1,9 @@
 from typing import Any, Optional, Union, Annotated
 
-from fastapi import APIRouter, HTTPException, Query, UploadFile
+from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 import logging
 import os
-from backend.app.api.utils import StorageFactory
+from app.api.utils import StorageFactory
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -16,8 +16,12 @@ storage = StorageFactory.create_storage(os.getenv("ENVIRONMENT", "development"))
 async def root():
     return {"message": "Hello World"}
 
-@router.get("/uploadfiles/")
-async def create_upload_files(files: Annotated[list[UploadFile], Query(description="List of files to be uploadeed")]):
+@router.post("/uploadfiles/")
+async def create_upload_files(
+        files: Annotated[
+        list[UploadFile], File(description="Multiple files as UploadFile")
+    ],
+):
     if not files:
         logger.error("No files provided for upload")
         raise HTTPException(status_code=400, detail="No files provided")

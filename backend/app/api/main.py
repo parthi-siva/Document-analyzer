@@ -1,7 +1,6 @@
 from fastapi import APIRouter
 from app.api.routes import upload
-from backend.app.api.utils import StorageFactory
-# Removed import of 'story' as it does not exist in 'backend.app.api.routes'
+from app.api.utils import StorageFactory
 
 api_router = APIRouter()
 
