@@ -25,6 +25,14 @@ const ChatPanel = ({ messages, onSendMessage, isLoading, hasDocuments }) => {
       </div>
 
       <div className="chat-messages">
+        {!hasDocuments && messages.length === 0 && (
+          <div className="empty-state">
+            <div className="empty-icon">💬</div>
+            <h3>Ready to chat with your documents</h3>
+            <p>Upload some documents in the Sources panel to get started. Once uploaded, you can ask questions about their content.</p>
+          </div>
+        )}
+        
         {messages.map((msg) => (
           <div key={msg.id} className={`chat-message ${msg.type}`}>
             <div className="message-content">{msg.content}</div>
@@ -36,13 +44,13 @@ const ChatPanel = ({ messages, onSendMessage, isLoading, hasDocuments }) => {
       <form className="chat-form" onSubmit={handleSubmit}>
         <input
           type="text"
-          placeholder={hasDocuments ? "Type your message here..." : "Upload documents to start chatting..."}
+          placeholder={hasDocuments ? "Ask me anything about your documents..." : "Upload documents to start chatting..."}
           value={message}
           onChange={handleChange}
           disabled={!hasDocuments}
           ref={inputRef}
         />
-        <button type="submit" disabled={!hasDocuments}>Send</button>
+        <button type="submit" disabled={!hasDocuments || !message.trim()}>Send</button>
       </form>
     </div>
   )
