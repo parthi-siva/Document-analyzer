@@ -24,30 +24,56 @@ function App() {
     setSources(prev => prev.filter(source => source.id !== id))
   }
 
-  const handleSendMessage = async (message) => {
-    if (!message.trim()) return
+  const handleSendMessage = async (messageText) => {
+    if (!messageText || !messageText.trim()) return
 
     const userMessage = {
       id: Date.now(),
       type: 'user',
-      content: message,
+      content: messageText.trim(),
       timestamp: new Date()
     }
 
     setMessages(prev => [...prev, userMessage])
     setIsLoading(true)
 
-    // Simulate AI response (replace with actual API call)
-    setTimeout(() => {
+    try {
+      // Send message to API
+      const url = new URL('http://127.0.0.1:8000/answer')
+      url.searchParams.append('query', messageText.trim())
+      
+      const response = await fetch(url, {
+        method: 'GET',
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+
+      const data = await response.json()
+      console.log('API Response:', data)
+      
+      // Add AI response to chat
       const aiMessage = {
         id: Date.now() + 1,
         type: 'ai',
-        content: `I understand your question: "${message}". Based on the uploaded documents, I can help you analyze the content. Please note that this is a demo response - in a real implementation, this would process your documents using RAG.`,
+        content: data.answer || data.response || "Sorry, I couldn't process that.",
         timestamp: new Date()
       }
       setMessages(prev => [...prev, aiMessage])
+    } catch (error) {
+      console.error('Error sending message:', error)
+      // Add error message to chat
+      const errorMessage = {
+        id: Date.now() + 1,
+        type: 'error',
+        content: "Failed to get response. Please try again.",
+        timestamp: new Date()
+      }
+      setMessages(prev => [...prev, errorMessage])
+    } finally {
       setIsLoading(false)
-    }, 1500)
+    }
   }
 
   return (

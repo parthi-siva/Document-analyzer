@@ -11,25 +11,16 @@ const ChatPanel = ({ messages, onSendMessage, isLoading, hasDocuments }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    if (message.trim()) {
-      onSendMessage({ id: Date.now(), type: 'user', content: message })
-      const userMessage = message
-      setMessage('')
-      inputRef.current.focus()
+    
+    // Validate and trim message
+    const trimmedMessage = typeof message === 'string' ? message.trim() : ''
+    if (!trimmedMessage || !hasDocuments) return
 
-      // Call backend /answer?query={}
-      try {
-        const res = await fetch(`/api/answer?query=${encodeURIComponent(userMessage)}`)
-        const data = await res.json()
-        if (data.response) {
-          onSendMessage({ id: Date.now() + 1, type: 'agent', content: data.response })
-        } else {
-          onSendMessage({ id: Date.now() + 1, type: 'agent', content: 'No answer received.' })
-        }
-      } catch (err) {
-        onSendMessage({ id: Date.now() + 1, type: 'agent', content: 'Error fetching answer.' })
-      }
-    }
+    // Clear input immediately
+    setMessage('')
+
+    // Send message to parent component (App.jsx) which handles the API call
+    onSendMessage(trimmedMessage)
   }
 
   return (
@@ -59,16 +50,20 @@ const ChatPanel = ({ messages, onSendMessage, isLoading, hasDocuments }) => {
         <input
           type="text"
           placeholder={hasDocuments ? "Ask me anything about your documents..." : "Upload documents to start chatting..."}
-          value={message}
+          value={typeof message === 'string' ? message : ''}
           onChange={handleChange}
           disabled={!hasDocuments}
           ref={inputRef}
         />
-        <button type="submit" disabled={!hasDocuments || !message.trim()}>Send</button>
+        <button
+          type="submit"
+          disabled={!hasDocuments || !message || !message.trim()}
+        >
+          Send
+        </button>
       </form>
     </div>
   )
 }
 
 export default ChatPanel
-
