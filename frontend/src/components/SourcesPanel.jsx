@@ -5,8 +5,31 @@ import './SourcesPanel.css'
 const SourcesPanel = ({ sources, onFileUpload, onRemoveSource }) => {
   const [isExpanded, setIsExpanded] = useState(false)
 
+  // Handle file upload to backend
+  const handleFileUpload = async (acceptedFiles) => {
+    const formData = new FormData()
+    acceptedFiles.forEach(file => {
+      formData.append('files', file)
+    })
+
+    try {
+      const res = await fetch('http://127.0.0.1:8000/uploadfiles/', {
+        method: 'POST',
+        body: formData,
+      })
+      const data = await res.json()
+      if (data.filenames) {
+        // Call parent callback to update sources
+        onFileUpload(acceptedFiles)
+      }
+    } catch (err) {
+      // Handle error (optional: show error to user)
+      console.error('Upload failed', err)
+    }
+  }
+
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop: onFileUpload,
+    onDrop: handleFileUpload,
     accept: {
       'application/pdf': ['.pdf'],
       'text/plain': ['.txt'],
@@ -22,7 +45,7 @@ const SourcesPanel = ({ sources, onFileUpload, onRemoveSource }) => {
     const k = 1024
     const sizes = ['Bytes', 'KB', 'MB', 'GB']
     const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+    return parseFloat((bytes / Math.pow(k, i).toFixed(2))) + ' ' + sizes[i]
   }
 
   const getFileIcon = (type) => {

@@ -9,12 +9,26 @@ const ChatPanel = ({ messages, onSendMessage, isLoading, hasDocuments }) => {
     setMessage(e.target.value)
   }
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
     if (message.trim()) {
-      onSendMessage(message)
+      onSendMessage({ id: Date.now(), type: 'user', content: message })
+      const userMessage = message
       setMessage('')
       inputRef.current.focus()
+
+      // Call backend /answer?query={}
+      try {
+        const res = await fetch(`/api/answer?query=${encodeURIComponent(userMessage)}`)
+        const data = await res.json()
+        if (data.response) {
+          onSendMessage({ id: Date.now() + 1, type: 'agent', content: data.response })
+        } else {
+          onSendMessage({ id: Date.now() + 1, type: 'agent', content: 'No answer received.' })
+        }
+      } catch (err) {
+        onSendMessage({ id: Date.now() + 1, type: 'agent', content: 'Error fetching answer.' })
+      }
     }
   }
 
