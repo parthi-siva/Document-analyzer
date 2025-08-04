@@ -1,3 +1,4 @@
+import os
 from typing import List, Optional, Any
 from dataclasses import dataclass
 from pathlib import Path
@@ -28,57 +29,57 @@ class ProcessResult:
 
 class DocumentParser:
     """Service responsible for parsing documents from various formats"""
-    
+
     def __init__(self):
         pass
-    
+
     async def parse(self, file_path: str) -> List[Document]:
         """Parse documents from directory path"""
         try:
             # Convert to Path object for better handling
             path = Path(file_path)
-            
+
             # Validate path exists
             if not path.exists():
                 raise FileNotFoundError(f"Path {file_path} does not exist")
-            
+
             # Use SimpleDirectoryReader to load documents
             reader = SimpleDirectoryReader(
                 input_dir=str(path) if path.is_dir() else str(path.parent),
                 filename_as_id=True
             )
             documents = reader.load_data()
-            
+
             return documents
         except Exception as e:
             raise Exception(f"Failed to parse documents: {str(e)}")
 
 class VectorStore:
     """Service responsible for storing and retrieving embeddings from ChromaDB"""
-    
+
     def __init__(self, persist_path: str = "./chroma_db", collection_name: str = "rag_collection"):
         self.persist_path = persist_path
         self.collection_name = collection_name
         self.client = chromadb.PersistentClient(path=persist_path)
         self.chroma_collection = self.client.get_or_create_collection(collection_name)
         self.vector_store = ChromaVectorStore(chroma_collection=self.chroma_collection)
-    
+
     async def store(self, documents: List[Document]) -> ProcessResult:
         """Store documents with embeddings in vector database"""
         try:
             # Create storage context
             storage_context = StorageContext.from_defaults(vector_store=self.vector_store)
-            
+
             # Create index which will automatically store in ChromaDB
             index = VectorStoreIndex.from_documents(
                 documents, 
                 storage_context=storage_context
             )
-            
+
             return ProcessResult(
                 success=True,
                 document_count=len(documents),
-                chunk_count=len(documents),  # Simplified - in practice this would be actual chunk count
+                chunk_count=len(documents),
                 metadata={
                     "collection_name": self.collection_name,
                     "storage_path": self.persist_path
@@ -86,7 +87,7 @@ class VectorStore:
             )
         except Exception as e:
             raise Exception(f"Failed to store embeddings: {str(e)}")
-    
+
     def get_index(self) -> VectorStoreIndex:
         """Retrieve existing index from vector store"""
         try:
@@ -102,7 +103,7 @@ class VectorStore:
 
 class RetrievalService:
     """Service responsible for retrieving relevant documents based on queries"""
-    
+
     def __init__(self, vector_store: VectorStore):
         self.vector_store = vector_store
     
@@ -136,16 +137,20 @@ class RetrievalService:
 
 class LLMOrchestrator:
     """Service responsible for generating responses using LLM"""
-    
+
     def __init__(self, llm: Optional[BaseLLM] = None):
-        self.llm = llm or OpenAI()
-    
+        self.llm = OpenAI(
+            model='Qwen/Qwen3-32B',
+            api_key=os.environ.get("OPENAI_API_KEY"),
+            base_url="https://api.deepinfra.com/v1/openai",
+        )
+
     async def generate(self, query: str, context: List[Document]) -> QueryResponse:
         """Generate response using LLM with provided context"""
         try:
             # Format context for prompt
             context_text = "\n\n".join([doc.text for doc in context[:3]])  # Limit context
-            
+
             # Create prompt with context
             prompt = f"""
             Context information is below.
@@ -157,10 +162,9 @@ class LLMOrchestrator:
             Query: {query}
             Answer:
             """
-            
             # Generate response
             response = self.llm.complete(prompt)
-            
+
             return QueryResponse(
                 content=str(response),
                 source_documents=context,
@@ -172,36 +176,3 @@ class LLMOrchestrator:
         except Exception as e:
             raise Exception(f"Failed to generate response: {str(e)}")
 
-
-# # Usage Example
-# async def main():
-#     """Example of how to use the services together"""
-    
-#     # Initialize services
-#     parser = DocumentParser()
-#     embedding_service = EmbeddingService()
-#     vector_store = VectorStore("./chroma_db", "my_documents")
-#     retrieval_service = RetrievalService(vector_store)
-#     llm_orchestrator = LLMOrchestrator()
-    
-#     # Initialize orchestrator
-#     workflow = RAGWorkflowOrchestrator(
-#         parser, embedding_service, vector_store, retrieval_service, llm_orchestrator
-#     )
-    
-#     # Example usage
-#     try:
-#         # Process documents
-#         result = await workflow.process_document("./documents/")
-#         print(f"Processed {result.document_count} documents")
-        
-#         # Query documents
-#         response = await workflow.query_document("What is the main topic?")
-#         print(f"Response: {response.content}")
-        
-#     except Exception as e:
-#         print(f"Error: {e}")
-
-# if __name__ == "__main__":
-#     # Run the async main function
-#     asyncio.run(main())

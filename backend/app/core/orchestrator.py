@@ -41,7 +41,7 @@ class RAGWorkflowOrchestrator:
             
             # Step 2: Generate response with LLM
             final_response = await self.llm_orchestrator.generate(
-                query, 
+                query,
                 retrieval_response.source_documents
             )
             
