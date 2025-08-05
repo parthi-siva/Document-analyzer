@@ -39,12 +39,12 @@ class RAGWorkflowOrchestrator:
     async def query_document(self, query: str) -> QueryResponse:
         """Complete pipeline for querying documents and generating responses"""
         try:
-            # Step 1: Retrieve relevant context
-            retrieval_response = await self.retrieval_service.search(query)
+            # Step 1: Retrieve relevant context (no LLM call here)
+            source_documents = await self.retrieval_service.search(query)
 
-            # Step 2: Generate response with LLM
+            # Step 2: Generate response with LLM (single API call)
             final_response = await self.llm_orchestrator.generate(
-                query, retrieval_response.source_documents
+                query, source_documents
             )
 
             return final_response

@@ -12,7 +12,6 @@ import chromadb
 from openai import OpenAI
 
 from app.core.custom_embeddings import DeepInfraEmbeddingModel
-from app.core.custom_llm_wrapper import DeepInfraLLM
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -170,53 +169,34 @@ class RetrievalService:
     """Service responsible for retrieving relevant documents based on queries"""
 
     def __init__(self, vector_store: VectorStore):
-        logger.info("Initializing RetrievalService with DeepInfra LLM")
+        logger.info("Initializing RetrievalService for document retrieval only")
         self.vector_store = vector_store
-        # Initialize DeepInfra LLM for retrieval
-        api_key = os.environ.get("OPENAI_API_KEY")
-        if not api_key:
-            logger.warning("OPENAI_API_KEY environment variable is not set")
-        self.llm = DeepInfraLLM(api_key=api_key, model="meta-llama/Llama-2-70b-chat-hf")
-        logger.debug("DeepInfra LLM initialized for RetrievalService")
+        logger.debug("RetrievalService initialized successfully")
 
-    async def search(self, query: str, top_k: int = 5) -> QueryResponse:
-        """Search for relevant documents based on query"""
-        logger.info(f"Starting search with query: {query[:50]}... top_k: {top_k}")
+    async def search(self, query: str, top_k: int = 5) -> List[Document]:
+        """Search for relevant documents based on query (retrieval only, no LLM generation)"""
+        logger.info(f"Starting document retrieval with query: {query[:50]}... top_k: {top_k}")
         try:
             logger.debug("Retrieving VectorStoreIndex")
             # Get existing index
             index = self.vector_store.get_index()
 
-            logger.debug("Creating query engine with DeepInfra LLM")
-            # Create query engine with explicit DeepInfra LLM
-            query_engine = index.as_query_engine(similarity_top_k=top_k, llm=self.llm)
+            logger.debug("Creating retriever for document search")
+            # Create retriever instead of query engine to avoid LLM call
+            retriever = index.as_retriever(similarity_top_k=top_k)
 
-            logger.info("Executing query with DeepInfra LLM")
-            # Execute query
-            response = query_engine.query(query)
-            logger.debug("Query executed successfully with DeepInfra")
+            logger.info("Executing document retrieval (no LLM generation)")
+            # Retrieve documents without LLM generation
+            retrieved_nodes = retriever.retrieve(query)
+            logger.debug(f"Retrieved {len(retrieved_nodes)} document nodes")
 
             # Extract source documents
-            logger.debug("Extracting source documents from response")
-            source_nodes = getattr(response, "source_nodes", [])
-            source_documents = (
-                [node.node for node in source_nodes] if source_nodes else []
-            )
+            logger.debug("Extracting source documents from nodes")
+            source_documents = [node.node for node in retrieved_nodes]
             logger.info(f"Extracted {len(source_documents)} source documents")
 
-            result = QueryResponse(
-                content=str(response),
-                source_documents=source_documents,
-                metadata={
-                    "query": query,
-                    "top_k": top_k,
-                    "similarity_scores": [node.score for node in source_nodes]
-                    if source_nodes
-                    else [],
-                },
-            )
-            logger.info("Search completed successfully")
-            return result
+            logger.info("Document retrieval completed successfully")
+            return source_documents
         except Exception as e:
-            logger.error(f"Failed to search documents: {str(e)}", exc_info=True)
-            raise Exception(f"Failed to search documents: {str(e)}")
+            logger.error(f"Failed to retrieve documents: {str(e)}", exc_info=True)
+            raise Exception(f"Failed to retrieve documents: {str(e)}")
