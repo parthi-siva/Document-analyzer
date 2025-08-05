@@ -6,6 +6,10 @@ from llama_index.core.base.llms.base import BaseLLM
 from openai import OpenAI
 
 from app.core.service import QueryResponse
+from app.services.prompt_manager import (
+    get_question_answer_prompt,
+    get_model_config
+)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -39,32 +43,24 @@ class LLMOrchestrator:
                 [doc.text for doc in context[:3]]
             )  # Limit context
             logger.debug(f"Context text length: {len(context_text)} characters")
+            # Get prompts using the prompt manager
+            system_prompt, user_prompt = get_question_answer_prompt(context_text, query)
+            logger.debug(f"Generated user prompt: {user_prompt[:100]}...")
 
-            system_prompt = "You are a helpful assistant that answers questions based on provided context."
-            # Create prompt with context
-            prompt = f"""
-            Context information is below.
-            ---------------------
-            {context_text}
-            ---------------------
-            Given the context information and not prior knowledge, 
-            answer the query.
-            Query: {query}
-            Answer:
-            """
-            logger.debug(f"Prompt length: {len(prompt)} characters")
-
+            # Get model configuration
+            model_config = get_model_config()
+        
             logger.info("Calling DeepInfra LLM API")
             # Generate response
             response = self.llm.chat.completions.create(
-                model="meta-llama/Llama-2-70b-chat-hf",
+                model=model_config.get('model_name', 'Qwen/Qwen3-32B'),
                 messages=[
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": prompt},
+                    {"role": "user", "content": user_prompt},
                 ],
-                temperature=0.7,
-                top_p=0.8,
-                max_tokens=1024,
+                temperature=model_config.get('temperature', 0.7),
+                top_p=model_config.get('top_p', 0.8),
+                max_tokens=model_config.get('max_tokens', 1024),
             )
             logger.debug("LLM API call completed successfully")
             content = response.choices[0].message.content
@@ -74,7 +70,7 @@ class LLMOrchestrator:
             result = QueryResponse(
                 content=content,
                 source_documents=context,
-                metadata={"model": "Qwen/Qwen3-32B", "prompt_length": len(prompt)},
+                metadata={"model": "Qwen/Qwen3-32B", "prompt_length": len(user_prompt)},
             )
             logger.info("LLM response generation completed successfully")
             return result

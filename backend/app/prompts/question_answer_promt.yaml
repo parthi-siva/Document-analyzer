@@ -1,0 +1,25 @@
+question_answer:
+  system_prompt: |
+    Your are an AI assistant that answers questions based on the provided context.
+    If the context does not provide enough information to answer the question, respond with "I don't know."
+    If the question is not related to the context, respond with "I don't know."
+    
+  
+  user_prompt_template: |
+    Context information is below.
+    ---------------------
+    {context_text}
+    ---------------------
+    Given the context information and not prior knowledge, 
+    answer the query.
+    Dont include Based on the context in your answer.
+    Query: {query}
+    Answer:
+
+
+
+model_config:
+  model_name: "meta-llama/Llama-2-70b-chat-hf"
+  temperature: 0.7
+  top_p: 0.8
+  max_tokens: 1024
