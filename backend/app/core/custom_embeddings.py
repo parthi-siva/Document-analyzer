@@ -4,9 +4,10 @@ from llama_index.core.embeddings import BaseEmbedding
 from openai import OpenAI
 from pydantic import PrivateAttr
 
+
 class DeepInfraEmbeddingModel(BaseEmbedding):
     _client: OpenAI = PrivateAttr()
-    
+
     def __init__(self, api_key: str, **kwargs):
         super().__init__(**kwargs)
         base_url = "https://api.deepinfra.com/v1/openai"
@@ -22,7 +23,7 @@ class DeepInfraEmbeddingModel(BaseEmbedding):
             response = self._client.embeddings.create(
                 model="Qwen/Qwen3-Embedding-0.6B",
                 input=[query],
-                encoding_format="float"
+                encoding_format="float",
             )
             print(f"Successfully received embedding response from DeepInfra")
             return response.data[0].embedding
@@ -32,17 +33,13 @@ class DeepInfraEmbeddingModel(BaseEmbedding):
 
     def _get_text_embedding(self, text: str) -> List[float]:
         response = self._client.embeddings.create(
-            model="Qwen/Qwen3-Embedding-0.6B",
-            input=[text],
-            encoding_format="float"
+            model="Qwen/Qwen3-Embedding-0.6B", input=[text], encoding_format="float"
         )
         return response.data[0].embedding
 
     def _get_text_embeddings(self, texts: List[str]) -> List[List[float]]:
         response = self._client.embeddings.create(
-            model="Qwen/Qwen3-Embedding-0.6B",
-            input=texts,
-            encoding_format="float"
+            model="Qwen/Qwen3-Embedding-0.6B", input=texts, encoding_format="float"
         )
         return [embedding.embedding for embedding in response.data]
 

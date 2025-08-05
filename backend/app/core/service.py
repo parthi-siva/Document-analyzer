@@ -18,11 +18,13 @@ from app.core.custom_llm_wrapper import DeepInfraLLM
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 @dataclass
 class QueryResponse:
     content: str
     source_documents: List[Document]
     metadata: dict
+
 
 @dataclass
 class ProcessResult:
@@ -30,6 +32,7 @@ class ProcessResult:
     document_count: int
     chunk_count: int
     metadata: dict
+
 
 class DocumentParser:
     """Service responsible for parsing documents from various formats"""
@@ -54,15 +57,16 @@ class DocumentParser:
             # Use SimpleDirectoryReader to load documents
             reader = SimpleDirectoryReader(
                 input_dir=str(path) if path.is_dir() else str(path.parent),
-                filename_as_id=True
+                filename_as_id=True,
             )
             documents = reader.load_data()
             logger.info(f"Successfully loaded {len(documents)} documents")
-            
+
             return documents
         except Exception as e:
             logger.error(f"Failed to parse documents: {str(e)}", exc_info=True)
             raise Exception(f"Failed to parse documents: {str(e)}")
+
 
 class EmbeddingService:
     """Service responsible for generating embeddings from document chunks"""
@@ -79,11 +83,16 @@ class EmbeddingService:
         self.embedding_model = DeepInfraEmbeddingModel(api_key=api_key)
         logger.debug("DeepInfraEmbeddingModel initialized successfully")
 
+
 class VectorStore:
     """Service responsible for storing and retrieving embeddings from ChromaDB"""
 
-    def __init__(self, persist_path: str = "./chroma_db", collection_name: str = "rag_collection"):
-        logger.info(f"Initializing VectorStore with path: {persist_path}, collection: {collection_name}")
+    def __init__(
+        self, persist_path: str = "./chroma_db", collection_name: str = "rag_collection"
+    ):
+        logger.info(
+            f"Initializing VectorStore with path: {persist_path}, collection: {collection_name}"
+        )
         self.persist_path = persist_path
         self.collection_name = collection_name
         logger.debug("Creating ChromaDB PersistentClient")
@@ -102,14 +111,16 @@ class VectorStore:
             # Use local embedding model for storage
             embedding_service = EmbeddingService()
             logger.debug("Creating StorageContext")
-            storage_context = StorageContext.from_defaults(vector_store=self.vector_store)
-            
+            storage_context = StorageContext.from_defaults(
+                vector_store=self.vector_store
+            )
+
             logger.info("Creating VectorStoreIndex from documents")
             # Create index which will automatically store in ChromaDB
             index = VectorStoreIndex.from_documents(
-                documents, 
+                documents,
                 storage_context=storage_context,
-                embed_model=embedding_service.embedding_model
+                embed_model=embedding_service.embedding_model,
             )
             logger.info("VectorStoreIndex created successfully")
 
@@ -119,10 +130,12 @@ class VectorStore:
                 chunk_count=len(documents),
                 metadata={
                     "collection_name": self.collection_name,
-                    "storage_path": self.persist_path
-                }
+                    "storage_path": self.persist_path,
+                },
             )
-            logger.info(f"Storage completed successfully. Document count: {len(documents)}")
+            logger.info(
+                f"Storage completed successfully. Document count: {len(documents)}"
+            )
             return result
         except Exception as e:
             logger.error(f"Failed to store embeddings: {str(e)}", exc_info=True)
@@ -136,19 +149,22 @@ class VectorStore:
             # Use the same embedding model for querying as we used for indexing
             embedding_service = EmbeddingService()
             logger.debug("Creating StorageContext for retrieval")
-            storage_context = StorageContext.from_defaults(vector_store=self.vector_store)
+            storage_context = StorageContext.from_defaults(
+                vector_store=self.vector_store
+            )
             logger.info("Creating VectorStoreIndex from vector store")
             # This assumes documents were already stored
             index = VectorStoreIndex.from_vector_store(
                 vector_store=self.vector_store,
                 storage_context=storage_context,
-                embed_model=embedding_service.embedding_model
+                embed_model=embedding_service.embedding_model,
             )
             logger.info("VectorStoreIndex retrieved successfully")
             return index
         except Exception as e:
             logger.error(f"Failed to retrieve index: {str(e)}", exc_info=True)
             raise Exception(f"Failed to retrieve index: {str(e)}")
+
 
 class RetrievalService:
     """Service responsible for retrieving relevant documents based on queries"""
@@ -160,10 +176,7 @@ class RetrievalService:
         api_key = os.environ.get("OPENAI_API_KEY")
         if not api_key:
             logger.warning("OPENAI_API_KEY environment variable is not set")
-        self.llm = DeepInfraLLM(
-            api_key=api_key,
-            model="meta-llama/Llama-2-70b-chat-hf"
-        )
+        self.llm = DeepInfraLLM(api_key=api_key, model="meta-llama/Llama-2-70b-chat-hf")
         logger.debug("DeepInfra LLM initialized for RetrievalService")
 
     async def search(self, query: str, top_k: int = 5) -> QueryResponse:
@@ -176,10 +189,7 @@ class RetrievalService:
 
             logger.debug("Creating query engine with DeepInfra LLM")
             # Create query engine with explicit DeepInfra LLM
-            query_engine = index.as_query_engine(
-                similarity_top_k=top_k,
-                llm=self.llm
-            )
+            query_engine = index.as_query_engine(similarity_top_k=top_k, llm=self.llm)
 
             logger.info("Executing query with DeepInfra LLM")
             # Execute query
@@ -188,8 +198,10 @@ class RetrievalService:
 
             # Extract source documents
             logger.debug("Extracting source documents from response")
-            source_nodes = getattr(response, 'source_nodes', [])
-            source_documents = [node.node for node in source_nodes] if source_nodes else []
+            source_nodes = getattr(response, "source_nodes", [])
+            source_documents = (
+                [node.node for node in source_nodes] if source_nodes else []
+            )
             logger.info(f"Extracted {len(source_documents)} source documents")
 
             result = QueryResponse(
@@ -198,12 +210,13 @@ class RetrievalService:
                 metadata={
                     "query": query,
                     "top_k": top_k,
-                    "similarity_scores": [node.score for node in source_nodes] if source_nodes else []
-                }
+                    "similarity_scores": [node.score for node in source_nodes]
+                    if source_nodes
+                    else [],
+                },
             )
             logger.info("Search completed successfully")
             return result
         except Exception as e:
             logger.error(f"Failed to search documents: {str(e)}", exc_info=True)
             raise Exception(f"Failed to search documents: {str(e)}")
-

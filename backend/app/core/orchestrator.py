@@ -11,6 +11,7 @@ from app.core.service import QueryResponse
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 class LLMOrchestrator:
     """Service responsible for generating responses using LLM"""
 
@@ -18,8 +19,10 @@ class LLMOrchestrator:
         logger.info("Initializing LLMOrchestrator with DeepInfra OpenAI client")
         api_key = os.environ.get("OPENAI_API_KEY")
         if not api_key:
-            logger.warning("OPENAI_API_KEY environment variable is not set - LLM calls may fail")
-        
+            logger.warning(
+                "OPENAI_API_KEY environment variable is not set - LLM calls may fail"
+            )
+
         self.llm = OpenAI(
             api_key=api_key,
             base_url="https://api.deepinfra.com/v1/openai",
@@ -32,7 +35,9 @@ class LLMOrchestrator:
         try:
             logger.debug(f"Formatting context from {len(context)} documents")
             # Format context for prompt
-            context_text = "\n\n".join([doc.text for doc in context[:3]])  # Limit context
+            context_text = "\n\n".join(
+                [doc.text for doc in context[:3]]
+            )  # Limit context
             logger.debug(f"Context text length: {len(context_text)} characters")
 
             system_prompt = "You are a helpful assistant that answers questions based on provided context."
@@ -48,11 +53,11 @@ class LLMOrchestrator:
             Answer:
             """
             logger.debug(f"Prompt length: {len(prompt)} characters")
-            
+
             logger.info("Calling DeepInfra LLM API")
             # Generate response
             response = self.llm.chat.completions.create(
-                model='meta-llama/Llama-2-70b-chat-hf',
+                model="meta-llama/Llama-2-70b-chat-hf",
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": prompt},
@@ -69,10 +74,7 @@ class LLMOrchestrator:
             result = QueryResponse(
                 content=content,
                 source_documents=context,
-                metadata={
-                    "model": "Qwen/Qwen3-32B",
-                    "prompt_length": len(prompt)
-                }
+                metadata={"model": "Qwen/Qwen3-32B", "prompt_length": len(prompt)},
             )
             logger.info("LLM response generation completed successfully")
             return result
