@@ -4,7 +4,6 @@ Includes cache configuration and other application settings.
 """
 
 import os
-from typing import Optional
 
 
 class CacheConfig:

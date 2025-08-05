@@ -1,15 +1,13 @@
 import os
 import logging
-from typing import List, Optional
+from typing import List
 from dataclasses import dataclass
 from pathlib import Path
 from llama_index.core import SimpleDirectoryReader, VectorStoreIndex
 from llama_index.core.schema import Document
 from llama_index.vector_stores.chroma import ChromaVectorStore
 from llama_index.core import StorageContext
-from llama_index.core.base.llms.base import BaseLLM
 import chromadb
-from openai import OpenAI
 
 from app.core.custom_embeddings import DeepInfraEmbeddingModel
 

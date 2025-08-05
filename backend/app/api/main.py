@@ -1,6 +1,5 @@
 from fastapi import APIRouter
 from app.api.routes import upload
-from app.api.utils import StorageFactory
 
 api_router = APIRouter()
 

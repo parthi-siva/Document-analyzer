@@ -1,10 +1,8 @@
 import logging
 from llama_index.core.llms import CustomLLM, CompletionResponse, LLMMetadata
 from pydantic import PrivateAttr
-import chromadb
 from openai import OpenAI
 
-from app.core.custom_embeddings import DeepInfraEmbeddingModel
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

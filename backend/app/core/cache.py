@@ -6,10 +6,9 @@ Supports both in-memory (development) and Redis (production) backends.
 import asyncio
 import hashlib
 import json
-import pickle
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional
 import logging
 
 logger = logging.getLogger(__name__)
