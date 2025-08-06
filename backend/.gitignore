@@ -6,3 +6,7 @@ app.egg-info
 htmlcov
 .cache
 .venv
+*.bin
+*.sqlite3
+*.db
+*.log
