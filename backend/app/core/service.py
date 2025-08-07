@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 # LangChain imports
-from langchain.document_loaders import DirectoryLoader, TextLoader, PyPDFLoader
+from langchain_community.document_loaders import DirectoryLoader, TextLoader, PyPDFLoader
 from langchain_core.documents import Document
 from langchain_chroma import Chroma
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -76,6 +76,7 @@ class DocumentParser:
                             str(path), 
                             glob=file_pattern,
                             loader_cls=TextLoader,
+                            loader_kwargs={'encoding': 'utf-8', 'autodetect_encoding': True},
                             show_progress=True
                         )
                     file_docs = loader.load()
@@ -101,19 +102,33 @@ class EmbeddingService:
 
     def __init__(self):
         """
-        Initialize with OpenAI embeddings via DeepInfra
+        Initialize with Sentence Transformers embeddings (local, no API key needed)
         """
-        logger.info("Initializing EmbeddingService with OpenAI embeddings")
-        api_key = os.environ.get("OPENAI_API_KEY", "")
-        if not api_key:
-            logger.warning("OPENAI_API_KEY environment variable is not set")
-
-        self.embedding_model = OpenAIEmbeddings(
-            api_key=api_key,
-            base_url="https://api.deepinfra.com/v1/openai",
-            model="text-embedding-3-small"
-        )
-        logger.debug("OpenAI embedding model initialized successfully")
+        logger.info("Initializing EmbeddingService with Sentence Transformers")
+        try:
+            from sentence_transformers import SentenceTransformer
+            from langchain_community.embeddings import HuggingFaceEmbeddings
+            
+            # Use a local sentence transformer model
+            self.embedding_model = HuggingFaceEmbeddings(
+                model_name="all-MiniLM-L6-v2",
+                model_kwargs={'device': 'cpu'},
+                encode_kwargs={'normalize_embeddings': False}
+            )
+            logger.info("Sentence Transformers embedding model initialized successfully")
+        except ImportError:
+            logger.error("sentence-transformers not installed. Using fallback.")
+            # Fallback to OpenAI if sentence-transformers not available
+            api_key = os.environ.get("OPENAI_API_KEY", "")
+            if not api_key:
+                logger.warning("OPENAI_API_KEY environment variable is not set")
+                
+            self.embedding_model = OpenAIEmbeddings(
+                api_key=api_key,
+                base_url="https://api.deepinfra.com/v1/openai",
+                model="text-embedding-3-small"
+            )
+            logger.info("OpenAI embedding model initialized as fallback")
 
 
 class VectorStore:
@@ -143,9 +158,31 @@ class VectorStore:
         """Store documents with embeddings in vector database"""
         logger.info(f"Starting storage of {len(documents)} documents")
         try:
+            # Preprocess documents to ensure clean text content
+            processed_documents = []
+            for doc in documents:
+                # Ensure page_content is a string, not a list of tokens
+                if isinstance(doc.page_content, list):
+                    # If it's a list of tokens, join them
+                    doc.page_content = " ".join(str(token) for token in doc.page_content)
+                elif not isinstance(doc.page_content, str):
+                    # Convert to string if it's not already
+                    doc.page_content = str(doc.page_content)
+                
+                # Clean and validate the text content
+                if doc.page_content and doc.page_content.strip():
+                    processed_documents.append(doc)
+                else:
+                    logger.warning(f"Skipping document with empty content: {doc.metadata}")
+            
+            logger.info(f"Processed {len(processed_documents)} valid documents")
+            
+            if not processed_documents:
+                raise ValueError("No valid documents to process after preprocessing")
+            
             logger.info("Adding documents to Chroma vector store")
             # Add documents to the vector store
-            self.vector_store.add_documents(documents)
+            self.vector_store.add_documents(processed_documents)
             logger.info("Documents added to vector store successfully")
 
             result = ProcessResult(
