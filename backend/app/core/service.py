@@ -48,45 +48,31 @@ class DocumentParser:
         """Parse documents from directory path"""
         logger.info(f"Starting document parsing for path: {file_path}")
         try:
-            # Convert to Path object for better handling
             path = Path(file_path)
             logger.debug(f"Converted path to Path object: {path}")
 
-            # Validate path exists
             if not path.exists():
                 logger.error(f"Path does not exist: {file_path}")
                 raise FileNotFoundError(f"Path {file_path} does not exist")
 
             logger.info("Loading documents with DirectoryLoader")
-            # Use DirectoryLoader to load documents
             documents = []
-            
+
             # Load different file types
-            for file_pattern in ["*.txt", "*.md", "*.pdf"]:
-                try:
-                    if file_pattern == "*.pdf":
-                        loader = DirectoryLoader(
-                            str(path), 
-                            glob=file_pattern,
-                            loader_cls=PyPDFLoader,
-                            show_progress=True
-                        )
-                    else:
-                        loader = DirectoryLoader(
-                            str(path), 
-                            glob=file_pattern,
-                            loader_cls=TextLoader,
-                            loader_kwargs={'encoding': 'utf-8', 'autodetect_encoding': True},
-                            show_progress=True
-                        )
-                    file_docs = loader.load()
-                    documents.extend(file_docs)
-                except Exception as e:
-                    logger.warning(f"Could not load files with pattern {file_pattern}: {e}")
-            
+            try:
+                loader = DirectoryLoader(
+                        str(path), 
+                        glob="*.pdf",
+                        loader_cls=PyPDFLoader,
+                        show_progress=True
+                    )
+                file_docs = loader.load()
+                documents.extend(file_docs)
+            except Exception as e:
+                logger.warning(f"Could not load files with pattern {file_pattern}: {e}")
+
             logger.info(f"Successfully loaded {len(documents)} documents")
-            
-            # Split documents into chunks
+
             logger.info("Splitting documents into chunks")
             chunked_documents = self.text_splitter.split_documents(documents)
             logger.info(f"Created {len(chunked_documents)} chunks")
@@ -158,31 +144,10 @@ class VectorStore:
         """Store documents with embeddings in vector database"""
         logger.info(f"Starting storage of {len(documents)} documents")
         try:
-            # Preprocess documents to ensure clean text content
-            processed_documents = []
-            for doc in documents:
-                # Ensure page_content is a string, not a list of tokens
-                if isinstance(doc.page_content, list):
-                    # If it's a list of tokens, join them
-                    doc.page_content = " ".join(str(token) for token in doc.page_content)
-                elif not isinstance(doc.page_content, str):
-                    # Convert to string if it's not already
-                    doc.page_content = str(doc.page_content)
-                
-                # Clean and validate the text content
-                if doc.page_content and doc.page_content.strip():
-                    processed_documents.append(doc)
-                else:
-                    logger.warning(f"Skipping document with empty content: {doc.metadata}")
-            
-            logger.info(f"Processed {len(processed_documents)} valid documents")
-            
-            if not processed_documents:
-                raise ValueError("No valid documents to process after preprocessing")
             
             logger.info("Adding documents to Chroma vector store")
-            # Add documents to the vector store
-            self.vector_store.add_documents(processed_documents)
+
+            self.vector_store.add_documents(documents)
             logger.info("Documents added to vector store successfully")
 
             result = ProcessResult(
@@ -217,30 +182,3 @@ class VectorStore:
             logger.error(f"Failed to create retriever: {str(e)}", exc_info=True)
             raise Exception(f"Failed to create retriever: {str(e)}")
 
-
-class RetrievalService:
-    """Service responsible for retrieving relevant documents based on queries"""
-
-    def __init__(self, vector_store: VectorStore):
-        logger.info("Initializing RetrievalService for document retrieval")
-        self.vector_store = vector_store
-        logger.debug("RetrievalService initialized successfully")
-
-    async def search(self, query: str, top_k: int = 5) -> List[Document]:
-        """Search for relevant documents based on query (retrieval only, no LLM generation)"""
-        logger.info(f"Starting document retrieval with query: {query[:50]}... top_k: {top_k}")
-        try:
-            logger.debug("Getting retriever from vector store")
-            # Get retriever from vector store
-            retriever = self.vector_store.get_retriever(k=top_k)
-
-            logger.info("Executing document retrieval (no LLM generation)")
-            # Retrieve documents without LLM generation
-            retrieved_documents = retriever.invoke(query)
-            logger.debug(f"Retrieved {len(retrieved_documents)} documents")
-
-            logger.info("Document retrieval completed successfully")
-            return retrieved_documents
-        except Exception as e:
-            logger.error(f"Failed to retrieve documents: {str(e)}", exc_info=True)
-            raise Exception(f"Failed to retrieve documents: {str(e)}")

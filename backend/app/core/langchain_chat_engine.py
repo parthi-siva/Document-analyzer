@@ -1,6 +1,6 @@
 import os
 import logging
-from typing import List, Dict, Any, Optional
+from typing import List
 
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
@@ -9,7 +9,6 @@ from langchain.chains.history_aware_retriever import create_history_aware_retrie
 from langchain.chains.retrieval import create_retrieval_chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_core.chat_history import BaseChatMessageHistory
-from langchain_community.chat_message_histories import ChatMessageHistory
 
 from app.core.database import DatabaseChatHistory
 from app.core.service import VectorStore, QueryResponse
@@ -58,8 +57,7 @@ class LangChainChatHistoryManager:
     def __init__(self, vector_store: VectorStore):
         api_key = os.environ.get("OPENAI_API_KEY")
         model_config = get_model_config()
-        
-        # Initialize LLM
+
         self.llm = ChatOpenAI(
             api_key=api_key,
             base_url="https://api.deepinfra.com/v1/openai",
@@ -69,8 +67,7 @@ class LangChainChatHistoryManager:
 
         self.vector_store = vector_store
         self.retriever = vector_store.get_retriever(k=5)
-        
-        # Create the contextualizing prompt for history-aware retrieval
+
         self.contextualize_q_prompt = ChatPromptTemplate.from_messages([
             ("system", """Given a chat history and the latest user question which might reference context in the chat history, 
             formulate a standalone question which can be understood without the chat history. 
@@ -78,8 +75,7 @@ class LangChainChatHistoryManager:
             MessagesPlaceholder("chat_history"),
             ("human", "{input}"),
         ])
-        
-        # Create the answer generation prompt
+
         self.qa_prompt = ChatPromptTemplate.from_messages([
             ("system", """You are an assistant for question-answering tasks. Use the following pieces of retrieved context to answer the question. 
             If you don't know the answer, just say that you don't know. Use three sentences maximum and keep the answer concise.
@@ -89,7 +85,6 @@ class LangChainChatHistoryManager:
             ("human", "{input}"),
         ])
         
-        # Create the chains
         self.history_aware_retriever = create_history_aware_retriever(
             self.llm, self.retriever, self.contextualize_q_prompt
         )
@@ -111,20 +106,16 @@ class LangChainChatHistoryManager:
         try:
             logger.info(f"Processing query with history: {query[:50]}... (session: {session_id})")
             
-            # Get chat history
             chat_history = self.get_session_history(session_id)
             
-            # Invoke the RAG chain with history
             result = await self.rag_chain.ainvoke({
                 "input": query,
                 "chat_history": chat_history.messages
             })
             
-            # Save the interaction to database
             chat_history.add_user_message(query)
             chat_history.add_ai_message(result["answer"])
             
-            # Create response
             response = QueryResponse(
                 content=result["answer"],
                 source_documents=result.get("context", []),

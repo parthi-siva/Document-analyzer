@@ -7,24 +7,19 @@ from app.api.utils import StorageFactory
 from app.core.service import (
     DocumentParser,
     VectorStore,
-    RetrievalService,
 )
 from app.core.langchain_workflow import LangChainRAGWorkflowOrchestrator
-from app.core.database import DatabaseChatHistory
-from app.core.chat_engine import ChatHistoryManager
+from app.core.langchain_chat_engine import LangChainChatHistoryManager
 
-# Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 storage = StorageFactory.create_storage(os.getenv("ENVIRONMENT", "development"))
 
-# Initialize services (removed caching as requested)
 parser = DocumentParser()
 vector_store = VectorStore("./chroma_db", "my_documents")
-chat_history_manager = ChatHistoryManager(vector_store=vector_store)
-retrieval_service = RetrievalService(vector_store=vector_store)
+chat_history_manager = LangChainChatHistoryManager(vector_store=vector_store)
 
 
 @router.get("/")
@@ -80,19 +75,16 @@ async def answer(
     uploads_path = "./uploads/"
 
     try:
-        # Use the new LangChain-based workflow
         langchain_workflow = LangChainRAGWorkflowOrchestrator(
-            parser, vector_store, retrieval_service
+            parser, vector_store, chat_history_manager
         )
 
-        # Process documents from uploads directory
         logger.info("Processing documents from uploads directory")
         result = await langchain_workflow.process_document(uploads_path)
         logger.info("Processed %s documents", result.document_count)
 
         logger.info(f"Querying with: {query} (session: {session_id}, use_history: {use_history})")
 
-        # Choose between history-aware and simple query based on use_history flag
         response = await langchain_workflow.query_document_with_history(query, session_id)
 
         logger.info(f"Query response: {response.content[:100]}...")
@@ -104,40 +96,4 @@ async def answer(
         }
     except Exception as e:
         logger.error(f"Error processing query: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/conversation/{session_id}")
-async def get_conversation_history(
-    session_id: str,
-    limit: int = Query(20, ge=1, le=100, description="Maximum number of messages to retrieve")
-):
-    """Get conversation history for a session."""
-    try:
-        db_history = DatabaseChatHistory()
-        history = db_history.get_history(session_id, limit)
-        return {
-            "session_id": session_id,
-            "history": history,
-            "message_count": len(history)
-        }
-    except Exception as e:
-        logger.error(f"Error retrieving conversation history: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.delete("/conversation/{session_id}")
-async def clear_conversation_history(session_id: str):
-    """Clear conversation history for a session."""
-    try:
-        db_history = DatabaseChatHistory()
-        deleted_count = db_history.clear_session_history(session_id)
-        logger.info(f"Cleared {deleted_count} messages for session {session_id}")
-        return {
-            "session_id": session_id,
-            "cleared_messages": deleted_count,
-            "message": f"Successfully cleared conversation history for session {session_id}"
-        }
-    except Exception as e:
-        logger.error(f"Error clearing conversation history: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
