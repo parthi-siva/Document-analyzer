@@ -7,13 +7,13 @@ from pathlib import Path
 # LangChain imports
 from langchain_community.document_loaders import (
     DirectoryLoader,
-    TextLoader,
     PyPDFLoader,
 )
 from langchain_core.documents import Document
 from langchain_chroma import Chroma
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_openai import OpenAIEmbeddings
+from pydantic import SecretStr
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -62,7 +62,6 @@ class DocumentParser:
             logger.info("Loading documents with DirectoryLoader")
             documents = []
 
-            # Load different file types
             try:
                 loader = DirectoryLoader(
                     str(path), glob="*.pdf", loader_cls=PyPDFLoader, show_progress=True
@@ -70,7 +69,7 @@ class DocumentParser:
                 file_docs = loader.load()
                 documents.extend(file_docs)
             except Exception as e:
-                logger.warning(f"Could not load files with pattern {file_pattern}: {e}")
+                logger.warning(f"Could not load files: {e}")
 
             logger.info(f"Successfully loaded {len(documents)} documents")
 
@@ -93,7 +92,6 @@ class EmbeddingService:
         """
         logger.info("Initializing EmbeddingService with Sentence Transformers")
         try:
-            from sentence_transformers import SentenceTransformer
             from langchain_community.embeddings import HuggingFaceEmbeddings
 
             # Use a local sentence transformer model
@@ -112,8 +110,11 @@ class EmbeddingService:
             if not api_key:
                 logger.warning("OPENAI_API_KEY environment variable is not set")
 
+            # Convert API key to SecretStr if it exists
+            secret_api_key = SecretStr(api_key) if api_key else None
+
             self.embedding_model = OpenAIEmbeddings(
-                api_key=api_key,
+                api_key=secret_api_key,
                 base_url="https://api.deepinfra.com/v1/openai",
                 model="text-embedding-3-small",
             )

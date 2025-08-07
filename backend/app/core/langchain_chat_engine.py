@@ -2,6 +2,7 @@ import os
 import logging
 from typing import List
 
+from pydantic import SecretStr
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_openai import ChatOpenAI
@@ -58,8 +59,11 @@ class LangChainChatHistoryManager:
         api_key = os.environ.get("OPENAI_API_KEY")
         model_config = get_model_config()
 
+        # Convert API key to SecretStr if it exists
+        secret_api_key = SecretStr(api_key) if api_key else None
+
         self.llm = ChatOpenAI(
-            api_key=api_key,
+            api_key=secret_api_key,
             base_url="https://api.deepinfra.com/v1/openai",
             model=model_config.get("model_name", "Qwen/Qwen2.5-72B-Instruct"),
             temperature=model_config.get("temperature", 0.7),
