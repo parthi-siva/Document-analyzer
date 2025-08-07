@@ -54,4 +54,16 @@ class DatabaseChatHistory:
             return history
         finally:
             db.close()
+    
+    def clear_session_history(self, session_id: str) -> int:
+        """Clear all messages for a session and return count of deleted messages."""
+        db = self.SessionLocal()
+        try:
+            deleted_count = db.query(ChatMessage)\
+                            .filter(ChatMessage.session_id == session_id)\
+                            .delete()
+            db.commit()
+            return deleted_count
+        finally:
+            db.close()
 

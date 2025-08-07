@@ -3,13 +3,17 @@ import logging
 from typing import List
 from dataclasses import dataclass
 from pathlib import Path
-from llama_index.core import SimpleDirectoryReader, VectorStoreIndex
-from llama_index.core.schema import Document
-from llama_index.vector_stores.chroma import ChromaVectorStore
-from llama_index.core import StorageContext
-import chromadb
 
-from app.core.custom_embeddings import DeepInfraEmbeddingModel
+# LangChain imports
+from langchain.document_loaders import DirectoryLoader, TextLoader, PyPDFLoader
+from langchain_core.documents import Document
+from langchain_chroma import Chroma
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from app.core.custom_embeddings import DeepInfraEmbeddings
+from langchain.retrievers import ContextualCompressionRetriever
+from langchain.retrievers.document_compressors import LLMChainExtractor
+from langchain_openai import ChatOpenAI
+import chromadb
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -36,6 +40,13 @@ class DocumentParser:
 
     def __init__(self):
         logger.info("Initializing DocumentParser")
+        # Initialize text splitter for chunking
+        self.text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=1000,
+            chunk_overlap=200,
+            length_function=len,
+            is_separator_regex=False,
+        )
 
     async def parse(self, file_path: str) -> List[Document]:
         """Parse documents from directory path"""
@@ -50,16 +61,40 @@ class DocumentParser:
                 logger.error(f"Path does not exist: {file_path}")
                 raise FileNotFoundError(f"Path {file_path} does not exist")
 
-            logger.info("Loading documents with SimpleDirectoryReader")
-            # Use SimpleDirectoryReader to load documents
-            reader = SimpleDirectoryReader(
-                input_dir=str(path) if path.is_dir() else str(path.parent),
-                filename_as_id=True,
-            )
-            documents = reader.load_data()
+            logger.info("Loading documents with DirectoryLoader")
+            # Use DirectoryLoader to load documents
+            documents = []
+            
+            # Load different file types
+            for file_pattern in ["*.txt", "*.md", "*.pdf"]:
+                try:
+                    if file_pattern == "*.pdf":
+                        loader = DirectoryLoader(
+                            str(path), 
+                            glob=file_pattern,
+                            loader_cls=PyPDFLoader,
+                            show_progress=True
+                        )
+                    else:
+                        loader = DirectoryLoader(
+                            str(path), 
+                            glob=file_pattern,
+                            loader_cls=TextLoader,
+                            show_progress=True
+                        )
+                    file_docs = loader.load()
+                    documents.extend(file_docs)
+                except Exception as e:
+                    logger.warning(f"Could not load files with pattern {file_pattern}: {e}")
+            
             logger.info(f"Successfully loaded {len(documents)} documents")
+            
+            # Split documents into chunks
+            logger.info("Splitting documents into chunks")
+            chunked_documents = self.text_splitter.split_documents(documents)
+            logger.info(f"Created {len(chunked_documents)} chunks")
 
-            return documents
+            return chunked_documents
         except Exception as e:
             logger.error(f"Failed to parse documents: {str(e)}", exc_info=True)
             raise Exception(f"Failed to parse documents: {str(e)}")
@@ -70,15 +105,19 @@ class EmbeddingService:
 
     def __init__(self):
         """
-        Initialize with HuggingFace embedding model
-        For DeepInfra, we can use open-source embedding models locally
+        Initialize with OpenAI embeddings via DeepInfra
         """
-        logger.info("Initializing EmbeddingService with DeepInfraEmbeddingModel")
+        logger.info("Initializing EmbeddingService with OpenAI embeddings")
         api_key = os.environ.get("OPENAI_API_KEY", "")
         if not api_key:
             logger.warning("OPENAI_API_KEY environment variable is not set")
-        self.embedding_model = DeepInfraEmbeddingModel(api_key=api_key)
-        logger.debug("DeepInfraEmbeddingModel initialized successfully")
+        
+        # Use DeepInfra embeddings
+        self.embedding_model = DeepInfraEmbeddings(
+            api_key=api_key,
+            model="text-embedding-3-small",  # You can change this to your preferred embedding model
+        )
+        logger.debug("OpenAI embedding model initialized successfully")
 
 
 class VectorStore:
@@ -92,34 +131,26 @@ class VectorStore:
         )
         self.persist_path = persist_path
         self.collection_name = collection_name
-        logger.debug("Creating ChromaDB PersistentClient")
-        self.client = chromadb.PersistentClient(path=persist_path)
-        logger.debug("Getting or creating ChromaDB collection")
-        self.chroma_collection = self.client.get_or_create_collection(collection_name)
-        logger.debug("Initializing ChromaVectorStore")
-        self.vector_store = ChromaVectorStore(chroma_collection=self.chroma_collection)
+        logger.debug("Initializing EmbeddingService")
+        self.embedding_service = EmbeddingService()
+        logger.debug("Creating Chroma vector store")
+
+        # Initialize Chroma vector store
+        self.vector_store = Chroma(
+            collection_name=collection_name,
+            embedding_function=self.embedding_service.embedding_model,
+            persist_directory=persist_path,
+        )
         logger.info("VectorStore initialized successfully")
 
     async def store(self, documents: List[Document]) -> ProcessResult:
         """Store documents with embeddings in vector database"""
         logger.info(f"Starting storage of {len(documents)} documents")
         try:
-            logger.debug("Initializing EmbeddingService")
-            # Use local embedding model for storage
-            embedding_service = EmbeddingService()
-            logger.debug("Creating StorageContext")
-            storage_context = StorageContext.from_defaults(
-                vector_store=self.vector_store
-            )
-
-            logger.info("Creating VectorStoreIndex from documents")
-            # Create index which will automatically store in ChromaDB
-            index = VectorStoreIndex.from_documents(
-                documents,
-                storage_context=storage_context,
-                embed_model=embedding_service.embedding_model,
-            )
-            logger.info("VectorStoreIndex created successfully")
+            logger.info("Adding documents to Chroma vector store")
+            # Add documents to the vector store
+            self.vector_store.add_documents(documents)
+            logger.info("Documents added to vector store successfully")
 
             result = ProcessResult(
                 success=True,
@@ -138,36 +169,27 @@ class VectorStore:
             logger.error(f"Failed to store embeddings: {str(e)}", exc_info=True)
             raise Exception(f"Failed to store embeddings: {str(e)}")
 
-    def get_index(self) -> VectorStoreIndex:
-        """Retrieve existing index from vector store"""
-        logger.info("Retrieving existing VectorStoreIndex")
+    def get_retriever(self, k: int = 5):
+        """Get retriever from vector store"""
+        logger.info("Creating retriever from vector store")
         try:
-            logger.debug("Initializing EmbeddingService for querying")
-            # Use the same embedding model for querying as we used for indexing
-            embedding_service = EmbeddingService()
-            logger.debug("Creating StorageContext for retrieval")
-            storage_context = StorageContext.from_defaults(
-                vector_store=self.vector_store
+            # Create retriever with similarity search
+            retriever = self.vector_store.as_retriever(
+                search_type="similarity",
+                search_kwargs={"k": k}
             )
-            logger.info("Creating VectorStoreIndex from vector store")
-            # This assumes documents were already stored
-            index = VectorStoreIndex.from_vector_store(
-                vector_store=self.vector_store,
-                storage_context=storage_context,
-                embed_model=embedding_service.embedding_model,
-            )
-            logger.info("VectorStoreIndex retrieved successfully")
-            return index
+            logger.info("Retriever created successfully")
+            return retriever
         except Exception as e:
-            logger.error(f"Failed to retrieve index: {str(e)}", exc_info=True)
-            raise Exception(f"Failed to retrieve index: {str(e)}")
+            logger.error(f"Failed to create retriever: {str(e)}", exc_info=True)
+            raise Exception(f"Failed to create retriever: {str(e)}")
 
 
 class RetrievalService:
     """Service responsible for retrieving relevant documents based on queries"""
 
     def __init__(self, vector_store: VectorStore):
-        logger.info("Initializing RetrievalService for document retrieval only")
+        logger.info("Initializing RetrievalService for document retrieval")
         self.vector_store = vector_store
         logger.debug("RetrievalService initialized successfully")
 
@@ -175,26 +197,17 @@ class RetrievalService:
         """Search for relevant documents based on query (retrieval only, no LLM generation)"""
         logger.info(f"Starting document retrieval with query: {query[:50]}... top_k: {top_k}")
         try:
-            logger.debug("Retrieving VectorStoreIndex")
-            # Get existing index
-            index = self.vector_store.get_index()
-
-            logger.debug("Creating retriever for document search")
-            # Create retriever instead of query engine to avoid LLM call
-            retriever = index.as_retriever(similarity_top_k=top_k)
+            logger.debug("Getting retriever from vector store")
+            # Get retriever from vector store
+            retriever = self.vector_store.get_retriever(k=top_k)
 
             logger.info("Executing document retrieval (no LLM generation)")
             # Retrieve documents without LLM generation
-            retrieved_nodes = retriever.retrieve(query)
-            logger.debug(f"Retrieved {len(retrieved_nodes)} document nodes")
-
-            # Extract source documents
-            logger.debug("Extracting source documents from nodes")
-            source_documents = [node.node for node in retrieved_nodes]
-            logger.info(f"Extracted {len(source_documents)} source documents")
+            retrieved_documents = retriever.invoke(query)
+            logger.debug(f"Retrieved {len(retrieved_documents)} documents")
 
             logger.info("Document retrieval completed successfully")
-            return source_documents
+            return retrieved_documents
         except Exception as e:
             logger.error(f"Failed to retrieve documents: {str(e)}", exc_info=True)
             raise Exception(f"Failed to retrieve documents: {str(e)}")

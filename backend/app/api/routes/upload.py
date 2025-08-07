@@ -1,22 +1,16 @@
 from typing import Annotated
-import hashlib
-
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 import logging
 import os
 
-from openai import OpenAI
-from app.core.custom_llm_wrapper import DeepInfraLLM
 from app.api.utils import StorageFactory
 from app.core.service import (
     DocumentParser,
     VectorStore,
     RetrievalService,
 )
-from app.core.cache import CacheFactory
-from app.core.config import config
 from app.core.orchestrator import LLMOrchestrator
-from app.core.workflow import RAGWorkflowOrchestrator
+from app.core.langchain_workflow import LangChainRAGWorkflowOrchestrator
 from app.core.database import DatabaseChatHistory
 from app.core.chat_engine import ChatHistoryManager
 
@@ -27,33 +21,12 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 storage = StorageFactory.create_storage(os.getenv("ENVIRONMENT", "development"))
 
-# Initialize cache for document processing results
-processed_docs_cache = CacheFactory.create_cache(
-    cache_type=config.cache.CACHE_TYPE,
-    default_ttl=config.cache.DOCUMENT_PROCESS_CACHE_TTL,
-)
-
+# Initialize services (removed caching as requested)
 parser = DocumentParser()
 vector_store = VectorStore("./chroma_db", "my_documents")
 chat_history_manager = ChatHistoryManager(vector_store=vector_store)
 retrieval_service = RetrievalService(vector_store=vector_store)
 llm_orchestrator = LLMOrchestrator()
-
-
-def get_uploads_hash(upload_dir: str) -> str:
-    """Generate a hash based on the filenames and their modification times in the uploads folder."""
-    try:
-        files = []
-        for fname in sorted(os.listdir(upload_dir)):
-            fpath = os.path.join(upload_dir, fname)
-            if os.path.isfile(fpath):
-                stat = os.stat(fpath)
-                files.append(f"{fname}:{stat.st_mtime}")
-        hash_str = "|".join(files)
-        return hashlib.sha256(hash_str.encode()).hexdigest()
-    except Exception as e:
-        logger.error(f"Error generating uploads hash: {e}")
-        return "no_files"
 
 
 @router.get("/")
@@ -67,7 +40,7 @@ async def create_upload_files(
         list[UploadFile], File(description="Multiple files as UploadFile")
     ],
 ):
-    """Upload multiple files and invalidate cache when new files are uploaded."""
+    """Upload multiple files."""
     if not files:
         logger.error("No files provided for upload")
         raise HTTPException(status_code=400, detail="No files provided")
@@ -85,18 +58,9 @@ async def create_upload_files(
             uploaded_files.append(file.filename)
             logger.info(f"Successfully uploaded: {file.filename}")
 
-        # Invalidate cache when new files are uploaded
-        uploads_path = "./uploads/"
-        new_cache_key = get_uploads_hash(uploads_path)
-
-        # Clear old cache entries if they exist
-        await processed_docs_cache.clear()
-        logger.info("Cache cleared due to new file uploads")
-
         return {
             "filenames": uploaded_files,
             "message": f"Successfully uploaded {len(uploaded_files)} files",
-            "cache_invalidated": True,
         }
     except HTTPException:
         raise
@@ -116,44 +80,32 @@ async def answer(
     Endpoint to answer a query using the uploaded files.
     """
     uploads_path = "./uploads/"
-    cache_key = get_uploads_hash(uploads_path)
 
     try:
-        workflow = RAGWorkflowOrchestrator(
-            parser, vector_store, retrieval_service, llm_orchestrator, chat_history_manager
+        # Use the new LangChain-based workflow
+        langchain_workflow = LangChainRAGWorkflowOrchestrator(
+            parser, vector_store, retrieval_service, llm_orchestrator
         )
 
-        # Check cache for processed documents
-        cached_result = await processed_docs_cache.get(cache_key)
-        if cached_result is not None:
-            logger.info(
-                "Cache HIT: Using cached results for uploads hash: %s...", cache_key[:8]
-            )
-            result = cached_result
-        else:
-            logger.info(
-                "Cache MISS: Processing documents for hash: %s..., cache_key[:8]"
-            )
-            result = await workflow.process_document("./uploads/")
-            logger.info("Processed %s documents", result.document_count)
+        # Process documents from uploads directory
+        logger.info("Processing documents from uploads directory")
+        result = await langchain_workflow.process_document(uploads_path)
+        logger.info("Processed %s documents", result.document_count)
 
-            # Store in cache with TTL
-            await processed_docs_cache.set(
-                cache_key, result, ttl=config.cache.DOCUMENT_PROCESS_CACHE_TTL
-            )
         logger.info(f"Querying with: {query} (session: {session_id}, use_history: {use_history})")
-        
-        # Use conversation-aware query if history is enabled
+
+        # Choose between history-aware and simple query based on use_history flag
         if use_history:
-            response = await workflow.query_document_with_history(query, session_id)
+            response = await langchain_workflow.query_document_with_history(query, session_id)
         else:
-            response = await workflow.query_document(query)
-            
-        logger.info(f"Query response: {response.content}")
+            response = await langchain_workflow.query_document(query, top_k)
+
+        logger.info(f"Query response: {response.content[:100]}...")
         return {
             "response": response.content,
             "session_id": session_id,
             "used_history": use_history,
+            "source_documents_count": len(response.source_documents),
         }
     except Exception as e:
         logger.error(f"Error processing query: {str(e)}")
@@ -183,21 +135,14 @@ async def get_conversation_history(
 async def clear_conversation_history(session_id: str):
     """Clear conversation history for a session."""
     try:
-        # Create a new database connection to perform deletion
         db_history = DatabaseChatHistory()
-        db = db_history.SessionLocal()
-        try:
-            from app.core.database import ChatMessage
-            deleted_count = db.query(ChatMessage).filter(ChatMessage.session_id == session_id).delete()
-            db.commit()
-            logger.info(f"Cleared {deleted_count} messages for session {session_id}")
-            return {
-                "session_id": session_id,
-                "cleared_messages": deleted_count,
-                "message": f"Successfully cleared conversation history for session {session_id}"
-            }
-        finally:
-            db.close()
+        deleted_count = db_history.clear_session_history(session_id)
+        logger.info(f"Cleared {deleted_count} messages for session {session_id}")
+        return {
+            "session_id": session_id,
+            "cleared_messages": deleted_count,
+            "message": f"Successfully cleared conversation history for session {session_id}"
+        }
     except Exception as e:
         logger.error(f"Error clearing conversation history: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

@@ -1,9 +1,10 @@
 import os
 import logging
 from typing import List, Optional
-from llama_index.core.schema import Document
-from llama_index.core.base.llms.base import BaseLLM
-from openai import OpenAI
+from langchain_core.documents import Document
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate
+from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.core.service import QueryResponse
 from app.services.prompt_manager import (
@@ -19,19 +20,25 @@ logger = logging.getLogger(__name__)
 class LLMOrchestrator:
     """Service responsible for generating responses using LLM"""
 
-    def __init__(self, llm: Optional[BaseLLM] = None):
-        logger.info("Initializing LLMOrchestrator with DeepInfra OpenAI client")
+    def __init__(self, llm: Optional[ChatOpenAI] = None):
+        logger.info("Initializing LLMOrchestrator with ChatOpenAI and DeepInfra")
         api_key = os.environ.get("OPENAI_API_KEY")
         if not api_key:
             logger.warning(
                 "OPENAI_API_KEY environment variable is not set - LLM calls may fail"
             )
 
-        self.llm = OpenAI(
-            api_key=api_key,
-            base_url="https://api.deepinfra.com/v1/openai",
+        # Get model configuration
+        model_config = get_model_config()
+        
+        self.llm = ChatOpenAI(
+            openai_api_key=api_key,
+            openai_api_base="https://api.deepinfra.com/v1/openai",
+            model_name=model_config.get('model_name', 'Qwen/Qwen3-32B'),
+            temperature=model_config.get('temperature', 0.7),
+            max_tokens=model_config.get('max_tokens', 1024),
         )
-        logger.debug("OpenAI client initialized with DeepInfra endpoint")
+        logger.debug("ChatOpenAI client initialized with DeepInfra endpoint")
 
     async def generate(self, query: str, context: List[Document]) -> QueryResponse:
         """Generate response using LLM with provided context"""
@@ -40,37 +47,34 @@ class LLMOrchestrator:
             logger.debug(f"Formatting context from {len(context)} documents")
             # Format context for prompt
             context_text = "\n\n".join(
-                [doc.text for doc in context[:3]]
+                [doc.page_content for doc in context[:3]]  # Use page_content for LangChain documents
             )  # Limit context
             logger.debug(f"Context text length: {len(context_text)} characters")
+            
             # Get prompts using the prompt manager
             system_prompt, user_prompt = get_question_answer_prompt(context_text, query)
             logger.debug(f"Generated user prompt: {user_prompt[:100]}...")
 
-            # Get model configuration
-            model_config = get_model_config()
-        
-            logger.info("Calling DeepInfra LLM API")
-            # Generate response
-            response = self.llm.chat.completions.create(
-                model=model_config.get('model_name', 'Qwen/Qwen3-32B'),
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
-                temperature=model_config.get('temperature', 0.7),
-                top_p=model_config.get('top_p', 0.8),
-                max_tokens=model_config.get('max_tokens', 1024),
-            )
+            logger.info("Calling LangChain ChatOpenAI")
+            # Create messages
+            messages = [
+                SystemMessage(content=system_prompt),
+                HumanMessage(content=user_prompt),
+            ]
+            
+            # Generate response using LangChain
+            response = await self.llm.ainvoke(messages)
             logger.debug("LLM API call completed successfully")
-            content = response.choices[0].message.content
+            
+            content = response.content
             if not content:
                 logger.warning("LLM response is empty, returning default message")
                 content = "No relevant information found in the provided context."
+            
             result = QueryResponse(
                 content=content,
                 source_documents=context,
-                metadata={"model": "Qwen/Qwen3-32B", "prompt_length": len(user_prompt)},
+                metadata={"model": self.llm.model_name, "prompt_length": len(user_prompt)},
             )
             logger.info("LLM response generation completed successfully")
             return result
