@@ -21,13 +21,10 @@ class LangChainRAGWorkflowOrchestrator:
         document_parser: DocumentParser,
         vector_store: VectorStore,
         retrieval_service: RetrievalService,
-        llm_orchestrator: LLMOrchestrator,
     ):
         self.document_parser = document_parser
         self.vector_store = vector_store
         self.retrieval_service = retrieval_service
-        self.llm_orchestrator = llm_orchestrator
-        
         # Initialize LangChain chat history manager
         self.langchain_chat_manager = LangChainChatHistoryManager(vector_store)
     
@@ -68,20 +65,6 @@ class LangChainRAGWorkflowOrchestrator:
             logger.error(f"Document query with history pipeline failed: {str(e)}", exc_info=True)
             raise Exception(f"Document query with history pipeline failed: {str(e)}")
     
-    async def query_document(self, query: str, top_k: int = 5) -> QueryResponse:
-        """Complete pipeline for querying documents without conversation history using LangChain"""
-        try:
-            logger.info(f"Starting simple query: {query[:50]}... (top_k: {top_k})")
-            
-            # Use LangChain-based simple retrieval (no history)
-            response = await self.langchain_chat_manager.query_without_history(query)
-            
-            logger.info("Successfully completed simple query")
-            return response
-            
-        except Exception as e:
-            logger.error(f"Document query pipeline failed: {str(e)}", exc_info=True)
-            raise Exception(f"Document query pipeline failed: {str(e)}")
     
     async def get_conversation_history(self, session_id: str, limit: int = 20) -> list:
         """Get conversation history for a session"""

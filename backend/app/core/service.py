@@ -9,11 +9,7 @@ from langchain.document_loaders import DirectoryLoader, TextLoader, PyPDFLoader
 from langchain_core.documents import Document
 from langchain_chroma import Chroma
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from app.core.custom_embeddings import DeepInfraEmbeddings
-from langchain.retrievers import ContextualCompressionRetriever
-from langchain.retrievers.document_compressors import LLMChainExtractor
-from langchain_openai import ChatOpenAI
-import chromadb
+from langchain_openai import OpenAIEmbeddings
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -111,11 +107,11 @@ class EmbeddingService:
         api_key = os.environ.get("OPENAI_API_KEY", "")
         if not api_key:
             logger.warning("OPENAI_API_KEY environment variable is not set")
-        
-        # Use DeepInfra embeddings
-        self.embedding_model = DeepInfraEmbeddings(
+
+        self.embedding_model = OpenAIEmbeddings(
             api_key=api_key,
-            model="text-embedding-3-small",  # You can change this to your preferred embedding model
+            base_url="https://api.deepinfra.com/v1/openai",
+            model="text-embedding-3-small"
         )
         logger.debug("OpenAI embedding model initialized successfully")
 

@@ -61,13 +61,12 @@ class LangChainChatHistoryManager:
         
         # Initialize LLM
         self.llm = ChatOpenAI(
-            openai_api_key=api_key,
-            openai_api_base="https://api.deepinfra.com/v1/openai",
-            model_name=model_config.get('model_name', 'Qwen/Qwen2.5-72B-Instruct'),
+            api_key=api_key,
+            base_url="https://api.deepinfra.com/v1/openai",
+            model=model_config.get('model_name', 'Qwen/Qwen2.5-72B-Instruct'),
             temperature=model_config.get('temperature', 0.7),
-            max_tokens=model_config.get('max_tokens', 1024),
         )
-        
+
         self.vector_store = vector_store
         self.retriever = vector_store.get_retriever(k=5)
         
@@ -143,42 +142,3 @@ class LangChainChatHistoryManager:
             logger.error(f"Failed to process query with history: {str(e)}", exc_info=True)
             raise Exception(f"Failed to process query with history: {str(e)}")
     
-    async def query_without_history(self, query: str) -> QueryResponse:
-        """Query without conversation history using simple retrieval."""
-        try:
-            logger.info(f"Processing query without history: {query[:50]}...")
-            
-            # Use the question-answer chain directly without history
-            # First retrieve relevant documents
-            docs = await self.retriever.ainvoke(query)
-            
-            # Then generate answer
-            prompt = ChatPromptTemplate.from_messages([
-                ("system", """You are an assistant for question-answering tasks. Use the following pieces of retrieved context to answer the question. 
-                If you don't know the answer, just say that you don't know. Use three sentences maximum and keep the answer concise.
-                
-                Context: {context}"""),
-                ("human", "{input}"),
-            ])
-            
-            chain = create_stuff_documents_chain(self.llm, prompt)
-            result = await chain.ainvoke({
-                "input": query,
-                "context": docs
-            })
-            
-            response = QueryResponse(
-                content=result,
-                source_documents=docs,
-                metadata={
-                    "has_history": False,
-                    "num_source_docs": len(docs)
-                }
-            )
-            
-            logger.info("Successfully processed query without history")
-            return response
-            
-        except Exception as e:
-            logger.error(f"Failed to process query without history: {str(e)}", exc_info=True)
-            raise Exception(f"Failed to process query without history: {str(e)}")

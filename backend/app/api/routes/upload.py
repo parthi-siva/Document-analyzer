@@ -9,7 +9,6 @@ from app.core.service import (
     VectorStore,
     RetrievalService,
 )
-from app.core.orchestrator import LLMOrchestrator
 from app.core.langchain_workflow import LangChainRAGWorkflowOrchestrator
 from app.core.database import DatabaseChatHistory
 from app.core.chat_engine import ChatHistoryManager
@@ -26,7 +25,6 @@ parser = DocumentParser()
 vector_store = VectorStore("./chroma_db", "my_documents")
 chat_history_manager = ChatHistoryManager(vector_store=vector_store)
 retrieval_service = RetrievalService(vector_store=vector_store)
-llm_orchestrator = LLMOrchestrator()
 
 
 @router.get("/")
@@ -84,7 +82,7 @@ async def answer(
     try:
         # Use the new LangChain-based workflow
         langchain_workflow = LangChainRAGWorkflowOrchestrator(
-            parser, vector_store, retrieval_service, llm_orchestrator
+            parser, vector_store, retrieval_service
         )
 
         # Process documents from uploads directory
@@ -95,10 +93,7 @@ async def answer(
         logger.info(f"Querying with: {query} (session: {session_id}, use_history: {use_history})")
 
         # Choose between history-aware and simple query based on use_history flag
-        if use_history:
-            response = await langchain_workflow.query_document_with_history(query, session_id)
-        else:
-            response = await langchain_workflow.query_document(query, top_k)
+        response = await langchain_workflow.query_document_with_history(query, session_id)
 
         logger.info(f"Query response: {response.content[:100]}...")
         return {
