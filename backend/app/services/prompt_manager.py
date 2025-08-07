@@ -132,26 +132,6 @@ def get_prompt_manager() -> PromptManager:
     return _prompt_manager_instance
 
 
-# Convenience functions for common operations
-def get_question_answer_prompt(context: str, query: str) -> tuple[str, str]:
-    """
-    Get formatted prompts.
-
-    Args:
-        context: Context information for the prompt
-        query: User query
-
-    Returns:
-        Tuple of (system_prompt, user_prompt)
-    """
-    pm = get_prompt_manager()
-    system_prompt = pm.get_prompt("question_answer", "system_prompt")
-    user_prompt = pm.get_prompt(
-        "question_answer", "user_prompt_template", context_text=context, query=query
-    )
-    return system_prompt, user_prompt
-
-
 def get_model_config() -> Dict[str, Any]:
     """
     Get model configuration.

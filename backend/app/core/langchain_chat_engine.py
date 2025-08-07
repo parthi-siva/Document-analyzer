@@ -12,7 +12,7 @@ from langchain_core.chat_history import BaseChatMessageHistory
 
 from app.core.database import DatabaseChatHistory
 from app.core.service import VectorStore, QueryResponse
-from app.services.prompt_manager import get_model_config
+from app.services.prompt_manager import get_model_config, get_prompt_manager
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -68,13 +68,14 @@ class LangChainChatHistoryManager:
         self.vector_store = vector_store
         self.retriever = vector_store.get_retriever(k=5)
 
+        pm = get_prompt_manager()
+        contextualize_q_prompt = pm.get_prompt("question_answer", "contextualize_q_prompt")
+        qa_prompt = pm.get_prompt("question_answer", "qa_prompt")
         self.contextualize_q_prompt = ChatPromptTemplate.from_messages(
             [
                 (
                     "system",
-                    """Given a chat history and the latest user question which might reference context in the chat history, 
-            formulate a standalone question which can be understood without the chat history. 
-            Do NOT answer the question, just reformulate it if needed and otherwise return it as is.""",
+                    contextualize_q_prompt,
                 ),
                 MessagesPlaceholder("chat_history"),
                 ("human", "{input}"),
@@ -85,10 +86,9 @@ class LangChainChatHistoryManager:
             [
                 (
                     "system",
-                    """You are an assistant for question-answering tasks. Use the following pieces of retrieved context to answer the question. 
-            If you don't know the answer, just say that you don't know. Use three sentences maximum and keep the answer concise.
-            
-            Context: {context}""",
+                    qa_prompt + """
+
+                    Context: {context}""",
                 ),
                 MessagesPlaceholder("chat_history"),
                 ("human", "{input}"),
