@@ -66,7 +66,9 @@ async def create_upload_files(
 async def answer(
     query: str = Query(..., description="Query to answer"),
     top_k: int = Query(5, ge=1, le=10, description="Number of top results to return"),
-    session_id: str = Query("default", description="Session ID for conversation history"),
+    session_id: str = Query(
+        "default", description="Session ID for conversation history"
+    ),
     use_history: bool = Query(True, description="Whether to use conversation history"),
 ):
     """
@@ -83,9 +85,13 @@ async def answer(
         result = await langchain_workflow.process_document(uploads_path)
         logger.info("Processed %s documents", result.document_count)
 
-        logger.info(f"Querying with: {query} (session: {session_id}, use_history: {use_history})")
+        logger.info(
+            f"Querying with: {query} (session: {session_id}, use_history: {use_history})"
+        )
 
-        response = await langchain_workflow.query_document_with_history(query, session_id)
+        response = await langchain_workflow.query_document_with_history(
+            query, session_id
+        )
 
         logger.info(f"Query response: {response.content[:100]}...")
         return {

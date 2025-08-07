@@ -5,7 +5,11 @@ from dataclasses import dataclass
 from pathlib import Path
 
 # LangChain imports
-from langchain_community.document_loaders import DirectoryLoader, TextLoader, PyPDFLoader
+from langchain_community.document_loaders import (
+    DirectoryLoader,
+    TextLoader,
+    PyPDFLoader,
+)
 from langchain_core.documents import Document
 from langchain_chroma import Chroma
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -61,11 +65,8 @@ class DocumentParser:
             # Load different file types
             try:
                 loader = DirectoryLoader(
-                        str(path), 
-                        glob="*.pdf",
-                        loader_cls=PyPDFLoader,
-                        show_progress=True
-                    )
+                    str(path), glob="*.pdf", loader_cls=PyPDFLoader, show_progress=True
+                )
                 file_docs = loader.load()
                 documents.extend(file_docs)
             except Exception as e:
@@ -94,25 +95,27 @@ class EmbeddingService:
         try:
             from sentence_transformers import SentenceTransformer
             from langchain_community.embeddings import HuggingFaceEmbeddings
-            
+
             # Use a local sentence transformer model
             self.embedding_model = HuggingFaceEmbeddings(
                 model_name="all-MiniLM-L6-v2",
-                model_kwargs={'device': 'cpu'},
-                encode_kwargs={'normalize_embeddings': False}
+                model_kwargs={"device": "cpu"},
+                encode_kwargs={"normalize_embeddings": False},
             )
-            logger.info("Sentence Transformers embedding model initialized successfully")
+            logger.info(
+                "Sentence Transformers embedding model initialized successfully"
+            )
         except ImportError:
             logger.error("sentence-transformers not installed. Using fallback.")
             # Fallback to OpenAI if sentence-transformers not available
             api_key = os.environ.get("OPENAI_API_KEY", "")
             if not api_key:
                 logger.warning("OPENAI_API_KEY environment variable is not set")
-                
+
             self.embedding_model = OpenAIEmbeddings(
                 api_key=api_key,
                 base_url="https://api.deepinfra.com/v1/openai",
-                model="text-embedding-3-small"
+                model="text-embedding-3-small",
             )
             logger.info("OpenAI embedding model initialized as fallback")
 
@@ -144,7 +147,6 @@ class VectorStore:
         """Store documents with embeddings in vector database"""
         logger.info(f"Starting storage of {len(documents)} documents")
         try:
-            
             logger.info("Adding documents to Chroma vector store")
 
             self.vector_store.add_documents(documents)
@@ -173,12 +175,10 @@ class VectorStore:
         try:
             # Create retriever with similarity search
             retriever = self.vector_store.as_retriever(
-                search_type="similarity",
-                search_kwargs={"k": k}
+                search_type="similarity", search_kwargs={"k": k}
             )
             logger.info("Retriever created successfully")
             return retriever
         except Exception as e:
             logger.error(f"Failed to create retriever: {str(e)}", exc_info=True)
             raise Exception(f"Failed to create retriever: {str(e)}")
-
