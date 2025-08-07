@@ -85,42 +85,40 @@ class DocumentParser:
 
 class EmbeddingService:
     """Service responsible for generating embeddings from document chunks"""
+    _instance = None
+    _embedding_model = None
 
-    def __init__(self):
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(EmbeddingService, cls).__new__(cls)
+            cls._initialize_embedding_model()
+        return cls._instance
+
+    @classmethod
+    def _initialize_embedding_model(cls):
         """
         Initialize with Sentence Transformers embeddings (local, no API key needed)
+        This method is called only once when the singleton is first created
         """
-        logger.info("Initializing EmbeddingService with Sentence Transformers")
-        try:
-            from langchain_community.embeddings import HuggingFaceEmbeddings
+        if cls._embedding_model is not None:
+            return
+            
+        logger.info("Initializing EmbeddingService with Sentence Transformers (singleton)")
+        from langchain_community.embeddings import HuggingFaceEmbeddings
 
-            # Use a local sentence transformer model
-            self.embedding_model = HuggingFaceEmbeddings(
-                model_name="all-MiniLM-L6-v2",
-                model_kwargs={"device": "cpu"},
-                encode_kwargs={"normalize_embeddings": False},
-            )
-            logger.info(
-                "Sentence Transformers embedding model initialized successfully"
-            )
-        except ImportError:
-            logger.error("sentence-transformers not installed. Using fallback.")
-            # Fallback to OpenAI if sentence-transformers not available
-            api_key = os.environ.get("OPENAI_API_KEY", "")
-            if not api_key:
-                logger.warning("OPENAI_API_KEY environment variable is not set")
+        cls._embedding_model = HuggingFaceEmbeddings(
+            model_name="all-MiniLM-L6-v2",
+            model_kwargs={"device": "cpu"},
+            encode_kwargs={"normalize_embeddings": False},
+        )
+        logger.info(
+            "Sentence Transformers embedding model initialized successfully (singleton)"
+        )
 
-            # Convert API key to SecretStr if it exists
-            secret_api_key = SecretStr(api_key) if api_key else None
-
-            self.embedding_model = OpenAIEmbeddings(
-                api_key=secret_api_key,
-                base_url="https://api.deepinfra.com/v1/openai",
-                model="text-embedding-3-small",
-            )
-            logger.info("OpenAI embedding model initialized as fallback")
-
-
+    @property
+    def embedding_model(self):
+        """Get the embedding model instance"""
+        return self._embedding_model
 class VectorStore:
     """Service responsible for storing and retrieving embeddings from ChromaDB"""
 
