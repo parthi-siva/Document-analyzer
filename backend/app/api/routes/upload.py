@@ -21,6 +21,9 @@ parser = DocumentParser()
 vector_store = VectorStore("./chroma_db", "my_documents")
 chat_history_manager = LangChainChatHistoryManager(vector_store=vector_store)
 
+langchain_workflow = LangChainRAGWorkflowOrchestrator(
+    parser, vector_store, chat_history_manager
+)
 
 @router.get("/")
 async def root():
@@ -37,7 +40,7 @@ async def create_upload_files(
     if not files:
         logger.error("No files provided for upload")
         raise HTTPException(status_code=400, detail="No files provided")
-
+    uploads_path = "./uploads/"
     uploaded_files = []
     try:
         for file in files:
@@ -50,7 +53,9 @@ async def create_upload_files(
             file_path = await storage.save(file, file.filename)
             uploaded_files.append(file.filename)
             logger.info(f"Successfully uploaded: {file.filename}")
-
+        logger.info("Processing documents from uploads directory")
+        result = await langchain_workflow.process_document(uploads_path)
+        logger.info("Processed %s documents", result.document_count)
         return {
             "filenames": uploaded_files,
             "message": f"Successfully uploaded {len(uploaded_files)} files",
@@ -74,17 +79,7 @@ async def answer(
     """
     Endpoint to answer a query using the uploaded files.
     """
-    uploads_path = "./uploads/"
-
     try:
-        langchain_workflow = LangChainRAGWorkflowOrchestrator(
-            parser, vector_store, chat_history_manager
-        )
-
-        logger.info("Processing documents from uploads directory")
-        result = await langchain_workflow.process_document(uploads_path)
-        logger.info("Processed %s documents", result.document_count)
-
         logger.info(
             f"Querying with: {query} (session: {session_id}, use_history: {use_history})"
         )
