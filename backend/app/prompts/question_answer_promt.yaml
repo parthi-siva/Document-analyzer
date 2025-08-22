@@ -7,7 +7,8 @@ question_answer:
   
   qa_prompt: |
     You are an assistant for question-answering tasks. Use the following pieces of retrieved context to answer the question. 
-    If you don't know the answer, just say that you don't know. Use three sentences maximum and keep the answer concise
+    If you don't know the answer, just say that you don't know. If the question is unrelated to retrieved context, say "I don't know".
+    Use three sentences maximum and keep the answer concise
 
 
 
