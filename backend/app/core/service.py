@@ -12,8 +12,7 @@ from langchain_community.document_loaders import (
 from langchain_core.documents import Document
 from langchain_chroma import Chroma
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_openai import OpenAIEmbeddings
-from pydantic import SecretStr
+
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -42,8 +41,8 @@ class DocumentParser:
         logger.info("Initializing DocumentParser")
         # Initialize text splitter for chunking
         self.text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=1000,
-            chunk_overlap=200,
+            chunk_size=500,
+            chunk_overlap=50,
             length_function=len,
             is_separator_regex=False,
         )
